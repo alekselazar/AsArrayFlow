@@ -12,17 +12,46 @@ class Layer:
     def __init__(self):
         self.input = None
         self.output = None
+        self.W = None
+        self.bias = None
         self._prev = None  # Store previous layer for gradient tracking
+        self._computed = False
     
     def __call__(self, x):
-        return self.forward(x)
+        self._prev = x
+
+        if self.W is None:
+            self._initialize_W(self._prev.output.shape)
+        else:
+            raise TypeError('Layer already connected to another')
+
+        return self
+    
+    def _initialize_W(self, shape):
+        raise NotImplementedError
     
     def forward(self, x):
+        if len(x.shape) < 2:
+            raise ValueError(f'Expected batch size in first dimention, got shape {x.shape}')
+        
+        batch_size = x.shape[0]
+        self.input = x
+        self.output = self.compute(x)
+
+        if self.output.shape[0] != batch_size:
+            self.reset()
+            raise RuntimeError(f'Batck size mismatch on output, expected {batch_size}, got {self.output.shape[0]}')
+        self._computed = True
+        return self.output
+
+    def compute(self, x):
         raise NotImplementedError
     
-    def backward(self, grad_output):
-        raise NotImplementedError
-    
+    def reset(self):
+        self.input = None
+        self.output = None
+        self._computed = False
+
     def apply_gradients(self, optimizer):
         """Applies gradients using a given optimizer."""
         pass
