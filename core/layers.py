@@ -12,7 +12,7 @@ class Layer:
     def __init__(self):
         self.input = None
         self.output = None
-        self.W = None
+        self.weights = None
         self.bias = None
         self._prev = None  # Store previous layer for gradient tracking
         self._computed = False
@@ -21,13 +21,13 @@ class Layer:
         self._prev = x
 
         if self.W is None:
-            self._initialize_W(self._prev.output.shape)
+            self._initialize_weights(self._prev.output.shape)
         else:
             raise TypeError('Layer already connected to another')
 
         return self
     
-    def _initialize_W(self, shape):
+    def _initialize_weights(self, shape):
         raise NotImplementedError
     
     def forward(self, x):
@@ -85,6 +85,15 @@ class Dense(Layer):
         self.biases = None
         self.grad_weights = None
         self.grad_biases = None
+
+    def _initialize_weights(self, shape):
+        if self.weights is not None:
+            raise RuntimeError('Weights alredy initialized for this layer')
+        input_size = shape[1]
+        self.weights = self.backend.random.randn(input_size, self.output_size) * 0.01
+        self.biases = self.backend.zeros(self.output_size)
+        self.grad_weights = self.backend.zeros_like(self.weights)
+        self.grad_biases = self.backend.zeros_like(self.biases)
     
     def forward(self, x):
         """Performs forward pass: Y = XW + b"""
@@ -92,13 +101,6 @@ class Dense(Layer):
             self._prev = x
             x = x.output
         
-        # Initialize weights and biases on first forward pass
-        if self.weights is None:
-            input_size = x.shape[1]
-            self.weights = self.backend.random.randn(input_size, self.output_size) * 0.01
-            self.biases = self.backend.zeros(self.output_size)
-            self.grad_weights = self.backend.zeros_like(self.weights)
-            self.grad_biases = self.backend.zeros_like(self.biases)
         
         self.input = x
         self.output = self.backend.dot(x, self.weights) + self.biases
