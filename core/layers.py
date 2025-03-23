@@ -12,6 +12,7 @@ class Layer:
     def __init__(self):
         self.input = None
         self.output = None
+        self.output_shape = None
         self.weights = None
         self.bias = None
         self._prev = None  # Store previous layer for gradient tracking
@@ -20,14 +21,18 @@ class Layer:
     def __call__(self, x):
         self._prev = x
 
-        if self.W is None:
+        if self.weights is None and self.output_shape is None:
             self._initialize_weights(self._prev.output.shape)
+            self.output_shape = self._compute_output_shape(self._prev.output.shape)
         else:
             raise TypeError('Layer already connected to another')
 
         return self
     
     def _initialize_weights(self, shape):
+        raise NotImplementedError
+    
+    def _compute_outpute_shape(self, input_shape):
         raise NotImplementedError
     
     def forward(self, x):
@@ -60,8 +65,7 @@ class InputLayer(Layer):
     """Input layer that just passes data forward."""
     def __init__(self, input_shape, use_gpu=False):
         super().__init__()
-        self.input_shape = input_shape
-        self.use_gpu = use_gpu
+        self.input_shape = (None, *input_shape)
         self.backend = cp if (use_gpu and GPU_AVAILABLE) else np
 
     def forward(self, x):
@@ -72,6 +76,12 @@ class InputLayer(Layer):
         if self._prev:
             self._prev.backward(grad_output)
 
+    def _initialize_weights(self, shape):
+        pass
+
+    def _compute_outpute_shape(self, input_shape):
+        return self.input_shape
+
 class Dense(Layer):
     """Fully connected (Dense) layer."""
     def __init__(self, output_size, use_gpu=False):
@@ -79,8 +89,6 @@ class Dense(Layer):
         self.use_gpu = use_gpu
         self.backend = cp if (use_gpu and GPU_AVAILABLE) else np
         self.output_size = output_size
-        
-        # Weights and biases will be initialized when the layer is first called
         self.weights = None
         self.biases = None
         self.grad_weights = None
@@ -89,22 +97,28 @@ class Dense(Layer):
     def _initialize_weights(self, shape):
         if self.weights is not None:
             raise RuntimeError('Weights alredy initialized for this layer')
-        input_size = shape[1]
+        input_size = shape[-1]
         self.weights = self.backend.random.randn(input_size, self.output_size) * 0.01
         self.biases = self.backend.zeros(self.output_size)
         self.grad_weights = self.backend.zeros_like(self.weights)
         self.grad_biases = self.backend.zeros_like(self.biases)
+
+    def _compute_outpute_shape(self, input_shape):
+        return (*input_shape[:-1], self.output_size)
     
-    def forward(self, x):
-        """Performs forward pass: Y = XW + b"""
+    def compute(self, x):
         if isinstance(x, Layer):  # If input is a layer, use its output
-            self._prev = x
             x = x.output
-        
-        
         self.input = x
-        self.output = self.backend.dot(x, self.weights) + self.biases
-        return self.output
+        original_shape = x.shape
+
+        if len(original_shape) > 2:
+            x_reshaped = x.reshape(-1, original_shape[-1])
+            output = self.backend.dot(x_reshaped, self.weights) + self.biases
+            return output.reshape(*original_shape[:-1], self.output_size)
+        else:
+            output = self.backend.dot(x, self.weights) + self.biases
+            return output
 
     def backward(self, grad_output):
         """Computes gradients for backpropagation and propagates to previous layer."""
