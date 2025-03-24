@@ -1,4 +1,4 @@
-from layers import Layer, InputLayer
+from .layers import Layer, InputLayer
 import numpy as np
 
 try:
